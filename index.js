@@ -9,6 +9,7 @@ import bcrypt from "bcryptjs";
 
 import { Message } from "./models/Message.js";
 import User from "./models/User.js";
+import Astrologer from "./models/Astrologer.js";
 import adminRoutes from "./routes/adminRoutes.js";
 import astrologerRoutes from "./routes/astrologerRoutes.js";
 import authRoutes from "./routes/authRoutes.js";
@@ -91,33 +92,42 @@ let billingStatus = {};
 io.on("connection", (socket) => {
   console.log("🔌 Socket connected:", socket.id);
 
-  /* ===============================
-     ASTROLOGER PERSONAL ROOM
-     =============================== */
-  socket.on("joinAstrologer", ({ astrologerId }) => {
-    socket.join(`astro_${astrologerId}`);
-    console.log(`🔮 Astrologer joined personal room: astro_${astrologerId}`);
+  // ⚡ Mark astrologer online
+  socket.on("astrologerOnline", async ({ astrologerId }) => {
+    // If astrologerId is actually a userId, convert it to Astrologer._id
+    let actualAstrologerId = astrologerId;
+    
+    try {
+      const astrologer = await Astrologer.findOne({ userId: astrologerId });
+      if (astrologer) {
+        actualAstrologerId = astrologer._id.toString();
+      }
+    } catch (error) {
+      console.error("Error finding astrologer:", error);
+    }
+    
+    astrologerSockets[actualAstrologerId] = socket.id;
+    socket.join(`astro_${actualAstrologerId}`);
+    console.log(`🔮 Astrologer online: ${actualAstrologerId}`);
   });
 
-  /* ===============================
-     CHAT ROOM JOIN
-     =============================== */
+  // ⚡ User requests chat → notify astrologer immediately
+  socket.on("userRequestsChat", (data) => {
+    const { astrologerId } = data;
+
+    const targetSocketId = astrologerSockets[astrologerId];
+    if (targetSocketId) {
+      io.to(`astro_${astrologerId}`).emit("incomingChatRequest", data);
+      console.log("📨 Sent chat request to astrologer:", astrologerId);
+    } else {
+      console.log("⚠ Astrologer offline, cannot send popup.");
+    }
+  });
+
+  // JOIN ROOM
   socket.on("joinRoom", ({ roomId }) => {
     socket.join(roomId);
-    console.log(`👥 Joined chat room: ${roomId}`);
-  });
-
-  /* ===============================
-     USER REQUESTS CHAT
-     =============================== */
-  socket.on("requestChat", ({ astrologerId, userId, roomId, userName }) => {
-    io.to(`astro_${astrologerId}`).emit("incomingChatRequest", {
-      userId,
-      userName,
-      roomId,
-    });
-
-    console.log(`📨 Chat request sent to astrologer ${astrologerId}`);
+    console.log(`Joined room: ${roomId}`);
   });
 
   /* ===============================
