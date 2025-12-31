@@ -89,107 +89,105 @@ const astrologerSockets = {};
 let billingStatus = {};
 
 io.on("connection", (socket) => {
-  console.log("User connected:", socket.id);
+  console.log("🔌 Socket connected:", socket.id);
 
-  // ⚡ Mark astrologer online
-  socket.on("astrologerOnline", ({ astrologerId }) => {
-    astrologerSockets[astrologerId] = socket.id;
-    console.log("🔮 Astrologer online:", astrologerId);
+  /* ===============================
+     ASTROLOGER PERSONAL ROOM
+     =============================== */
+  socket.on("joinAstrologer", ({ astrologerId }) => {
+    socket.join(`astro_${astrologerId}`);
+    console.log(`🔮 Astrologer joined personal room: astro_${astrologerId}`);
   });
 
-  // ⚡ User requests chat → notify astrologer immediately
-  socket.on("userRequestsChat", (data) => {
-    const { astrologerId } = data;
-
-    const targetSocketId = astrologerSockets[astrologerId];
-    if (targetSocketId) {
-      io.to(targetSocketId).emit("incomingChatRequest", data);
-      console.log("📨 Sent chat request to astrologer:", astrologerId);
-    } else {
-      console.log("⚠ Astrologer offline, cannot send popup.");
-    }
-  });
-
-  // JOIN ROOM
+  /* ===============================
+     CHAT ROOM JOIN
+     =============================== */
   socket.on("joinRoom", ({ roomId }) => {
     socket.join(roomId);
-    console.log(`Joined room: ${roomId}`);
+    console.log(`👥 Joined chat room: ${roomId}`);
   });
 
-  // USER JOINED
-  socket.on("user-joined", ({ roomId, userId, pricePerMinute }) => {
+  /* ===============================
+     USER REQUESTS CHAT
+     =============================== */
+  socket.on("requestChat", ({ astrologerId, userId, roomId, userName }) => {
+    io.to(`astro_${astrologerId}`).emit("incomingChatRequest", {
+      userId,
+      userName,
+      roomId,
+    });
+
+    console.log(`📨 Chat request sent to astrologer ${astrologerId}`);
+  });
+
+  /* ===============================
+     PARTICIPANT JOINED (SYNC BOTH SIDES)
+     =============================== */
+  socket.on("participant-joined", ({ roomId, role, userId, astrologerId, pricePerMinute }) => {
     if (!billingStatus[roomId]) {
       billingStatus[roomId] = {
         userJoined: false,
         astroJoined: false,
         interval: null,
-        pricePerMinute,
-        userId,
-        astrologerId: null,
+        pricePerMinute: pricePerMinute || 0,
+        userId: userId || null,
+        astrologerId: astrologerId || null,
       };
     }
-    billingStatus[roomId].userJoined = true;
-    billingStatus[roomId].pricePerMinute = pricePerMinute;
-    billingStatus[roomId].userId = userId;
 
-    io.to(roomId).emit("userJoinedRoom");
+    if (role === "user") {
+      billingStatus[roomId].userJoined = true;
+      billingStatus[roomId].userId = userId;
+    }
+
+    if (role === "astrologer") {
+      billingStatus[roomId].astroJoined = true;
+      billingStatus[roomId].astrologerId = astrologerId;
+    }
+
+    // Notify the OTHER participant
+    socket.to(roomId).emit("participant-joined", { role });
+
+    console.log(`✅ ${role} joined room ${roomId}`);
 
     checkStartBilling(roomId);
   });
 
-  // ASTRO JOINED
-  socket.on("astro-joined", ({ roomId, astrologerId }) => {
-    if (!billingStatus[roomId]) {
-      billingStatus[roomId] = {
-        userJoined: false,
-        astroJoined: false,
-        interval: null,
-        pricePerMinute: null,
-        userId: null,
-        astrologerId,
-      };
-    }
-    billingStatus[roomId].astroJoined = true;
-    billingStatus[roomId].astrologerId = astrologerId;
-
-    io.to(roomId).emit("astroJoinedRoom");
-
-    checkStartBilling(roomId);
-  });
-
-  // SEND MESSAGE
+  /* ===============================
+     SEND MESSAGE
+     =============================== */
   socket.on("sendMessage", async (data) => {
-    console.log("📩 Message received:", data);
+    try {
+      const message = await Message.create({
+        chatRoomId: data.chatRoomId,
+        sender: data.senderId,
+        receiver: data.receiverId,
+        senderModel: "User",       // keep as-is (not breaking)
+        receiverModel: "Astrologer",
+        content: data.content,
+      });
 
-    const message = await Message.create({
-      chatRoomId: data.chatRoomId,
-      sender: data.senderId,
-      receiver: data.receiverId,
-      senderModel: "User",
-      receiverModel: "Astrologer",
-      content: data.message || data.content,
-    });
-
-    io.to(data.chatRoomId).emit("receiveMessage", {
-      _id: message._id,
-      chatRoomId: message.chatRoomId,
-      senderId: message.sender.toString(),
-      receiverId: message.receiver.toString(),
-      content: message.content,
-      createdAt: message.createdAt,
-    });
+      io.to(data.chatRoomId).emit("receiveMessage", {
+        _id: message._id,
+        chatRoomId: message.chatRoomId,
+        senderId: message.sender.toString(),
+        receiverId: message.receiver.toString(),
+        content: message.content,
+        createdAt: message.createdAt,
+      });
+    } catch (err) {
+      console.log("❌ Message error:", err.message);
+    }
   });
 
-  // DISCONNECT
+  /* ===============================
+     DISCONNECT
+     =============================== */
   socket.on("disconnect", () => {
-    for (const astroId in astrologerSockets) {
-      if (astrologerSockets[astroId] === socket.id) {
-        delete astrologerSockets[astroId];
-      }
-    }
-    console.log("Disconnected:", socket.id);
+    console.log("❌ Socket disconnected:", socket.id);
   });
 });
+
 
 /**
  * BILLING LOGIC
