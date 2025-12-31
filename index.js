@@ -94,6 +94,11 @@ io.on("connection", (socket) => {
 
   // ⚡ Mark astrologer online
   socket.on("astrologerOnline", async ({ astrologerId }) => {
+    console.log("🔍 ASTROLOGER ONLINE DEBUG:", {
+      receivedId: astrologerId,
+      socketId: socket.id
+    });
+    
     // If astrologerId is actually a userId, convert it to Astrologer._id
     let actualAstrologerId = astrologerId;
     
@@ -101,6 +106,7 @@ io.on("connection", (socket) => {
       const astrologer = await Astrologer.findOne({ userId: astrologerId });
       if (astrologer) {
         actualAstrologerId = astrologer._id.toString();
+        console.log("🔄 Converted User._id to Astrologer._id:", astrologerId, "→", actualAstrologerId);
       }
     } catch (error) {
       console.error("Error finding astrologer:", error);
@@ -108,19 +114,35 @@ io.on("connection", (socket) => {
     
     astrologerSockets[actualAstrologerId] = socket.id;
     socket.join(`astro_${actualAstrologerId}`);
-    console.log(`🔮 Astrologer online: ${actualAstrologerId}`);
+    
+    console.log("🔍 ASTROLOGER REGISTERED:", {
+      astrologerId: actualAstrologerId,
+      socketId: socket.id,
+      roomName: `astro_${actualAstrologerId}`,
+      allOnlineAstrologers: Object.keys(astrologerSockets)
+    });
   });
 
   // ⚡ User requests chat → notify astrologer immediately
   socket.on("userRequestsChat", (data) => {
+    console.log("🔍 USER REQUEST RECEIVED:", data);
+    
     const { astrologerId } = data;
-
     const targetSocketId = astrologerSockets[astrologerId];
+    
+    console.log("🔍 USER REQUEST DEBUG:", {
+      requestedAstrologerId: astrologerId,
+      targetSocketId: targetSocketId,
+      roomName: `astro_${astrologerId}`,
+      allOnlineAstrologers: Object.keys(astrologerSockets),
+      astrologerFound: !!targetSocketId
+    });
+
     if (targetSocketId) {
       io.to(`astro_${astrologerId}`).emit("incomingChatRequest", data);
-      console.log("📨 Sent chat request to astrologer:", astrologerId);
+      console.log("📨 NOTIFICATION SENT to astrologer:", astrologerId);
     } else {
-      console.log("⚠ Astrologer offline, cannot send popup.");
+      console.log("⚠ ASTROLOGER NOT FOUND - offline or wrong ID:", astrologerId);
     }
   });
 
