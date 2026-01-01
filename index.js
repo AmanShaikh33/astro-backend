@@ -71,119 +71,97 @@ const io = new Server(server, {
   cors: { origin: "*", methods: ["GET", "POST"] },
 });
 
-/** Track online astrologers */
-const astrologerSockets = {};
-
 /**
- * Billing memory structure:
- * billingStatus = {
- *   roomId123: {
- *     userJoined: true,
- *     astroJoined: false,
- *     interval: null,
- *     pricePerMinute: 20,
- *     userId: "...",
- *     astrologerId: "..."
- *   }
- * }
+ * Billing memory structure
  */
 let billingStatus = {};
 
 io.on("connection", (socket) => {
   console.log("🔌 Socket connected:", socket.id);
 
-  // ⚡ Mark astrologer online
+  /* ===============================
+     ASTROLOGER ONLINE → JOIN ROOM
+     =============================== */
   socket.on("astrologerOnline", async ({ astrologerId }) => {
-    console.log("🔍 ASTROLOGER ONLINE DEBUG:", {
-      receivedId: astrologerId,
-      socketId: socket.id
-    });
-    
-    // If astrologerId is actually a userId, convert it to Astrologer._id
-    let actualAstrologerId = astrologerId;
-    
     try {
-      const astrologer = await Astrologer.findOne({ userId: astrologerId });
-      if (astrologer) {
-        actualAstrologerId = astrologer._id.toString();
-        console.log("🔄 Converted User._id to Astrologer._id:", astrologerId, "→", actualAstrologerId);
-      }
-    } catch (error) {
-      console.error("Error finding astrologer:", error);
+      // astrologerId MUST be Astrologer._id
+      socket.join(`astro_${astrologerId}`);
+
+      console.log("🔮 Astrologer joined room:", `astro_${astrologerId}`);
+      console.log("🔮 Socket ID:", socket.id);
+      console.log("🔮 All rooms for this socket:", Array.from(socket.rooms));
+    } catch (err) {
+      console.error("❌ astrologerOnline error:", err.message);
     }
-    
-    astrologerSockets[actualAstrologerId] = socket.id;
-    socket.join(`astro_${actualAstrologerId}`);
-    
-    console.log("🔍 ASTROLOGER REGISTERED:", {
-      astrologerId: actualAstrologerId,
-      socketId: socket.id,
-      roomName: `astro_${actualAstrologerId}`,
-      allOnlineAstrologers: Object.keys(astrologerSockets)
-    });
-  });
-
-  // ⚡ User requests chat → notify astrologer immediately
-  socket.on("userRequestsChat", (data) => {
-    console.log("🔍 USER REQUEST RECEIVED:", data);
-    
-    const { astrologerId } = data;
-    const targetSocketId = astrologerSockets[astrologerId];
-    
-    console.log("🔍 USER REQUEST DEBUG:", {
-      requestedAstrologerId: astrologerId,
-      targetSocketId: targetSocketId,
-      roomName: `astro_${astrologerId}`,
-      allOnlineAstrologers: Object.keys(astrologerSockets),
-      astrologerFound: !!targetSocketId
-    });
-
-    if (targetSocketId) {
-      io.to(`astro_${astrologerId}`).emit("incomingChatRequest", data);
-      console.log("📨 NOTIFICATION SENT to astrologer:", astrologerId);
-    } else {
-      console.log("⚠ ASTROLOGER NOT FOUND - offline or wrong ID:", astrologerId);
-    }
-  });
-
-  // JOIN ROOM
-  socket.on("joinRoom", ({ roomId }) => {
-    socket.join(roomId);
-    console.log(`Joined room: ${roomId}`);
   });
 
   /* ===============================
-     PARTICIPANT JOINED (SYNC BOTH SIDES)
+     USER REQUESTS CHAT
      =============================== */
-  socket.on("participant-joined", ({ roomId, role, userId, astrologerId, pricePerMinute }) => {
-    if (!billingStatus[roomId]) {
-      billingStatus[roomId] = {
-        userJoined: false,
-        astroJoined: false,
-        interval: null,
-        pricePerMinute: pricePerMinute || 0,
-        userId: userId || null,
-        astrologerId: astrologerId || null,
-      };
-    }
+  socket.on("userRequestsChat", (data) => {
+    const { astrologerId, userId, roomId, userName } = data;
 
-    if (role === "user") {
-      billingStatus[roomId].userJoined = true;
-      billingStatus[roomId].userId = userId;
-    }
+    console.log("🔥 USER REQUEST RECEIVED:", {
+      astrologerId,
+      userId,
+      roomId,
+      userName
+    });
 
-    if (role === "astrologer") {
-      billingStatus[roomId].astroJoined = true;
-      billingStatus[roomId].astrologerId = astrologerId;
-    }
+    console.log("📡 Sending to room:", `astro_${astrologerId}`);
+    console.log("📡 Sockets in room:", io.sockets.adapter.rooms.get(`astro_${astrologerId}`));
 
-    // Notify the OTHER participant
-    socket.to(roomId).emit("participant-joined", { role });
+    io.to(`astro_${astrologerId}`).emit("incomingChatRequest", {
+      userId,
+      userName,
+      roomId,
+    });
 
-    console.log(`✅ ${role} joined room ${roomId}`);
-
-    checkStartBilling(roomId);
+    console.log("📨 NOTIFICATION SENT to astrologer:", astrologerId);
   });
+
+  /* ===============================
+     JOIN CHAT ROOM
+     =============================== */
+  socket.on("joinRoom", ({ roomId }) => {
+    socket.join(roomId);
+    console.log("👥 Joined chat room:", roomId);
+  });
+
+  /* ===============================
+     PARTICIPANT JOINED (SYNC)
+     =============================== */
+  socket.on(
+    "participant-joined",
+    ({ roomId, role, userId, astrologerId, pricePerMinute }) => {
+      if (!billingStatus[roomId]) {
+        billingStatus[roomId] = {
+          userJoined: false,
+          astroJoined: false,
+          interval: null,
+          pricePerMinute: pricePerMinute || 0,
+          userId: null,
+          astrologerId: null,
+        };
+      }
+
+      if (role === "user") {
+        billingStatus[roomId].userJoined = true;
+        billingStatus[roomId].userId = userId;
+      }
+
+      if (role === "astrologer") {
+        billingStatus[roomId].astroJoined = true;
+        billingStatus[roomId].astrologerId = astrologerId;
+      }
+
+      socket.to(roomId).emit("participant-joined", { role });
+
+      console.log(`✅ ${role} joined room ${roomId}`);
+
+      checkStartBilling(roomId);
+    }
+  );
 
   /* ===============================
      SEND MESSAGE
@@ -194,7 +172,7 @@ io.on("connection", (socket) => {
         chatRoomId: data.chatRoomId,
         sender: data.senderId,
         receiver: data.receiverId,
-        senderModel: "User",       // keep as-is (not breaking)
+        senderModel: "User",
         receiverModel: "Astrologer",
         content: data.content,
       });
@@ -208,7 +186,7 @@ io.on("connection", (socket) => {
         createdAt: message.createdAt,
       });
     } catch (err) {
-      console.log("❌ Message error:", err.message);
+      console.error("❌ Message error:", err.message);
     }
   });
 
@@ -219,6 +197,7 @@ io.on("connection", (socket) => {
     console.log("❌ Socket disconnected:", socket.id);
   });
 });
+
 
 
 /**
