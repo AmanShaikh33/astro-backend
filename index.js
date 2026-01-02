@@ -267,13 +267,19 @@ async function checkStartBilling(roomId) {
     io.to(roomId).emit("timerUpdate", room.elapsedSeconds);
   }, 1000);
 
-  // Billing every minute
+  // Billing every minute (change to 10 seconds for testing)
   room.interval = setInterval(async () => {
     try {
+      console.log(`💰 Processing billing for room ${roomId}...`);
       const user = await User.findById(room.userId);
       const astrologer = await Astrologer.findById(room.astrologerId);
       
-      if (!user || !astrologer) return;
+      if (!user || !astrologer) {
+        console.log("❌ User or astrologer not found");
+        return;
+      }
+
+      console.log(`💰 Current user coins: ${user.coins}, Price: ${room.pricePerMinute}`);
 
       if (user.coins < room.pricePerMinute) {
         clearInterval(room.interval);
@@ -293,16 +299,18 @@ async function checkStartBilling(roomId) {
       await user.save();
       await astrologer.save();
 
-      io.to(roomId).emit("coinsUpdated", {
+      const updateData = {
         userCoins: user.coins,
         astrologerEarnings: astrologer.earnings
-      });
+      };
+
+      io.to(roomId).emit("coinsUpdated", updateData);
       
-      console.log(`💰 Transferred ${room.pricePerMinute} coins from user to astrologer`);
+      console.log(`💰 Transferred ${room.pricePerMinute} coins. New balances:`, updateData);
     } catch (err) {
       console.log("Billing error:", err.message);
     }
-  }, 60000);
+  }, 10000); // 10 seconds for testing, change back to 60000 for production
 }
 
 /**
