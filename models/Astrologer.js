@@ -42,6 +42,10 @@ const astrologerSchema = new mongoose.Schema({
     type: String,
     enum: ["pending", "approved", "rejected"],
     default: "pending"
+  },
+  earnings: {
+    type: Number,
+    default: 0
   }
 }, { timestamps: true });
 

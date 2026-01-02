@@ -311,6 +311,11 @@ async function checkStartBilling(roomId) {
       console.log("Billing error:", err.message);
     }
   }, 10000); // 10 seconds for testing, change back to 60000 for production
+} balances:`, updateData);
+    } catch (err) {
+      console.log("Billing error:", err.message);
+    }
+  }, 10000); // 10 seconds for testing, change back to 60000 for production
 }
 
 /**
@@ -321,6 +326,16 @@ function cleanupRoom(roomId) {
     // Clear billing interval
     if (billingStatus[roomId].interval) {
       clearInterval(billingStatus[roomId].interval);
+    }
+    // Clear timer interval
+    if (billingStatus[roomId].timerInterval) {
+      clearInterval(billingStatus[roomId].timerInterval);
+    }
+    // Remove room from memory
+    delete billingStatus[roomId];
+    console.log("🧹 Cleaned up room:", roomId);
+  }
+}ingStatus[roomId].interval);
     }
     // Clear timer interval
     if (billingStatus[roomId].timerInterval) {
