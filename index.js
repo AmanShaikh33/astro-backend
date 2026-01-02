@@ -255,27 +255,50 @@ async function checkStartBilling(roomId) {
 
   if (room.interval) return;
 
+  // Initialize timer
+  room.startTime = Date.now();
+  room.elapsedSeconds = 0;
+
   io.to(roomId).emit("startBilling");
 
+  // Send timer updates every second
+  room.timerInterval = setInterval(() => {
+    room.elapsedSeconds++;
+    io.to(roomId).emit("timerUpdate", room.elapsedSeconds);
+  }, 1000);
+
+  // Billing every minute
   room.interval = setInterval(async () => {
     try {
       const user = await User.findById(room.userId);
-      if (!user) return;
+      const astrologer = await Astrologer.findById(room.astrologerId);
+      
+      if (!user || !astrologer) return;
 
       if (user.coins < room.pricePerMinute) {
         clearInterval(room.interval);
+        clearInterval(room.timerInterval);
         room.interval = null;
+        room.timerInterval = null;
 
         io.to(roomId).emit("endChatDueToLowBalance");
         cleanupRoom(roomId);
         return;
       }
 
-      // Deduct coins
+      // Transfer coins from user to astrologer
       user.coins -= room.pricePerMinute;
+      astrologer.earnings = (astrologer.earnings || 0) + room.pricePerMinute;
+      
       await user.save();
+      await astrologer.save();
 
-      io.to(roomId).emit("coinsUpdated", user.coins);
+      io.to(roomId).emit("coinsUpdated", {
+        userCoins: user.coins,
+        astrologerEarnings: astrologer.earnings
+      });
+      
+      console.log(`💰 Transferred ${room.pricePerMinute} coins from user to astrologer`);
     } catch (err) {
       console.log("Billing error:", err.message);
     }
@@ -290,6 +313,10 @@ function cleanupRoom(roomId) {
     // Clear billing interval
     if (billingStatus[roomId].interval) {
       clearInterval(billingStatus[roomId].interval);
+    }
+    // Clear timer interval
+    if (billingStatus[roomId].timerInterval) {
+      clearInterval(billingStatus[roomId].timerInterval);
     }
     // Remove room from memory
     delete billingStatus[roomId];
