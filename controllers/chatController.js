@@ -39,13 +39,17 @@ export const createOrGetChatRoom = async (req, res) => {
     let chatRoom = await ChatRoom.findOne({
       user: finalUserId,
       astrologer: finalAstroId,
-    });
+    }).populate('user', 'name email coins').populate('astrologer', 'name email earnings');
 
     if (!chatRoom) {
       chatRoom = await ChatRoom.create({
         user: finalUserId,
         astrologer: finalAstroId,
       });
+      // Populate after creation
+      chatRoom = await ChatRoom.findById(chatRoom._id)
+        .populate('user', 'name email coins')
+        .populate('astrologer', 'name email earnings');
       console.log("✨ New ChatRoom created:", chatRoom._id);
     } else {
       console.log("✅ Existing ChatRoom found:", chatRoom._id);

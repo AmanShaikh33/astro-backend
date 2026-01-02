@@ -17,6 +17,19 @@ router.get("/approved", getApprovedAstrologers);
 // For users: get all astrologers
 router.get("/", protect, getAllAstrologers);
 
+// Get astrologer by ID
+router.get("/:id", protect, async (req, res) => {
+  try {
+    const astrologer = await Astrologer.findById(req.params.id);
+    if (!astrologer) {
+      return res.status(404).json({ message: "Astrologer not found" });
+    }
+    res.status(200).json(astrologer);
+  } catch (error) {
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+});
+
 // Admin can delete any astrologer by ID
 
 // Admin can delete any astrologer by ID

@@ -273,13 +273,27 @@ async function checkStartBilling(roomId) {
       console.log(`💰 Looking for astrologer ID: ${room.astrologerId}`);
       
       const user = await User.findById(room.userId);
+      // Find astrologer by their document _id, not user ID
       const astrologer = await Astrologer.findById(room.astrologerId);
       
       console.log(`💰 User found:`, user ? `Yes (coins: ${user.coins})` : "No");
       console.log(`💰 Astrologer found:`, astrologer ? `Yes (earnings: ${astrologer.earnings || 0})` : "No");
       
-      if (!user || !astrologer) {
-        console.log("❌ User or astrologer not found - stopping billing");
+      if (!user) {
+        console.log("❌ User not found - stopping billing");
+        clearInterval(room.interval);
+        clearInterval(room.timerInterval);
+        room.interval = null;
+        room.timerInterval = null;
+        return;
+      }
+      
+      if (!astrologer) {
+        console.log("❌ Astrologer not found - stopping billing");
+        clearInterval(room.interval);
+        clearInterval(room.timerInterval);
+        room.interval = null;
+        room.timerInterval = null;
         return;
       }
 
