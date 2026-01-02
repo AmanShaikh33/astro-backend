@@ -76,6 +76,11 @@ const io = new Server(server, {
  */
 let billingStatus = {};
 
+/**
+ * Track socket rooms for cleanup
+ */
+let socketRooms = new Map(); // socketId -> Set of roomIds
+
 io.on("connection", (socket) => {
   console.log("🔌 Socket connected:", socket.id);
 
@@ -125,7 +130,34 @@ io.on("connection", (socket) => {
      =============================== */
   socket.on("joinRoom", ({ roomId }) => {
     socket.join(roomId);
+    
+    // Track which rooms this socket is in
+    if (!socketRooms.has(socket.id)) {
+      socketRooms.set(socket.id, new Set());
+    }
+    socketRooms.get(socket.id).add(roomId);
+    
     console.log("👥 Joined chat room:", roomId);
+  });
+
+  /* ===============================
+     LEAVE CHAT ROOM
+     =============================== */
+  socket.on("leaveRoom", ({ roomId, role }) => {
+    socket.leave(roomId);
+    
+    // Remove from socket tracking
+    if (socketRooms.has(socket.id)) {
+      socketRooms.get(socket.id).delete(roomId);
+    }
+    
+    // Notify other participants
+    socket.to(roomId).emit("participantLeft", { role });
+    
+    // Clean up billing
+    cleanupRoom(roomId);
+    
+    console.log(`🚪 ${role} left room:`, roomId);
   });
 
   /* ===============================
@@ -195,6 +227,18 @@ io.on("connection", (socket) => {
      =============================== */
   socket.on("disconnect", () => {
     console.log("❌ Socket disconnected:", socket.id);
+    
+    // Clean up all rooms this socket was in
+    if (socketRooms.has(socket.id)) {
+      const rooms = socketRooms.get(socket.id);
+      rooms.forEach(roomId => {
+        // Notify other participants
+        socket.to(roomId).emit("participantLeft", { role: "unknown" });
+        // Clean up billing
+        cleanupRoom(roomId);
+      });
+      socketRooms.delete(socket.id);
+    }
   });
 });
 
@@ -223,6 +267,7 @@ async function checkStartBilling(roomId) {
         room.interval = null;
 
         io.to(roomId).emit("endChatDueToLowBalance");
+        cleanupRoom(roomId);
         return;
       }
 
@@ -235,6 +280,21 @@ async function checkStartBilling(roomId) {
       console.log("Billing error:", err.message);
     }
   }, 60000);
+}
+
+/**
+ * ROOM CLEANUP
+ */
+function cleanupRoom(roomId) {
+  if (billingStatus[roomId]) {
+    // Clear billing interval
+    if (billingStatus[roomId].interval) {
+      clearInterval(billingStatus[roomId].interval);
+    }
+    // Remove room from memory
+    delete billingStatus[roomId];
+    console.log("🧹 Cleaned up room:", roomId);
+  }
 }
 
 // Bind to 0.0.0.0 so other devices on the LAN can connect
