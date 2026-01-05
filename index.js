@@ -171,7 +171,7 @@ io.on("connection", (socket) => {
           userJoined: false,
           astroJoined: false,
           interval: null,
-          pricePerMinute: pricePerMinute || 0,
+          pricePerMinute: pricePerMinute || 10, // Default 10 coins per minute
           userId: null,
           astrologerId: null,
         };
@@ -180,16 +180,20 @@ io.on("connection", (socket) => {
       if (role === "user") {
         billingStatus[roomId].userJoined = true;
         billingStatus[roomId].userId = userId;
+        console.log(`👤 User joined: ${userId}`);
       }
 
       if (role === "astrologer") {
         billingStatus[roomId].astroJoined = true;
+        // astrologerId should be the Astrologer document _id, not user _id
         billingStatus[roomId].astrologerId = astrologerId;
+        console.log(`🔮 Astrologer joined: ${astrologerId}`);
       }
 
       socket.to(roomId).emit("participant-joined", { role });
 
       console.log(`✅ ${role} joined room ${roomId}`);
+      console.log(`💰 Current billing status:`, billingStatus[roomId]);
 
       checkStartBilling(roomId);
     }
@@ -340,7 +344,7 @@ async function checkStartBilling(roomId) {
       console.log("Billing error:", err.message);
       console.error("Full billing error:", err);
     }
-  }, 10000); // 10 seconds for testing, change back to 60000 for production
+  }, 60000); // 60 seconds = 1 minute for production billing
 }
 
 /**
