@@ -1,6 +1,8 @@
 import { ChatRoom } from "../models/ChatRoom.js";
 import { Message } from "../models/Message.js";
 import Astrologer from "../models/Astrologer.js"; // add this line
+import ChatSession from "../models/ChatSession.js";
+
 
 // ✅ Create or get a chat room
 export const createOrGetChatRoom = async (req, res) => {
@@ -55,7 +57,22 @@ export const createOrGetChatRoom = async (req, res) => {
       console.log("✅ Existing ChatRoom found:", chatRoom._id);
     }
 
+    await ChatSession.findOneAndUpdate(
+  { roomId: chatRoom._id },
+  {
+    roomId: chatRoom._id,
+    userId: finalUserId,
+    astrologerId: finalAstroId,
+    pricePerMinute: chatRoom.astrologer.pricePerMinute,
+    status: "waiting",
+  },
+  { upsert: true, new: true }
+);
+
+
     res.status(200).json(chatRoom);
+
+    
   } catch (error) {
     console.error("❌ createOrGetChatRoom error:", error);
     res.status(500).json({

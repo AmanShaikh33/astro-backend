@@ -2,7 +2,12 @@ import mongoose from "mongoose";
 
 const transactionSchema = new mongoose.Schema(
   {
-    type: { type: String, enum: ["TOPUP"], required: true },
+    type: {
+  type: String,
+  enum: ["TOPUP", "CHAT_DEBIT"],
+  required: true,
+},
+
     amount: { type: Number, required: true }, // rupees
     coins: { type: Number, required: true }, // coins credited
     razorpayPaymentId: { type: String },

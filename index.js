@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import cors from "cors";
 import dotenv from "dotenv";
 import express from "express";
@@ -15,6 +16,10 @@ import astrologerRoutes from "./routes/astrologerRoutes.js";
 import authRoutes from "./routes/authRoutes.js";
 import chatRoutes from "./routes/chatRoutes.js";
 import paymentRoutes from "./routes/paymentRoutes.js";
+import ChatSession from "./models/ChatSession.js";
+import Transaction from "./models/Transaction.js";
+
+
 
 dotenv.config();
 const app = express();
@@ -144,60 +149,81 @@ io.on("connection", (socket) => {
      LEAVE CHAT ROOM
      =============================== */
   socket.on("leaveRoom", ({ roomId, role }) => {
-    socket.leave(roomId);
-    
-    // Remove from socket tracking
-    if (socketRooms.has(socket.id)) {
-      socketRooms.get(socket.id).delete(roomId);
-    }
-    
-    // Notify other participants
-    socket.to(roomId).emit("participantLeft", { role });
-    
-    // Clean up billing
-    cleanupRoom(roomId);
-    
-    console.log(`🚪 ${role} left room:`, roomId);
-  });
+  if (!roomId) {
+    console.warn("⚠️ leaveRoom called without roomId");
+    return;
+  }
+
+  socket.leave(roomId);
+
+  if (socketRooms.has(socket.id)) {
+    socketRooms.get(socket.id).delete(roomId);
+  }
+
+  socket.to(roomId).emit("participantLeft", { role });
+
+  cleanupRoom(roomId);
+
+  console.log(`🚪 ${role} left room:`, roomId);
+});
+
 
   /* ===============================
      PARTICIPANT JOINED (SYNC)
      =============================== */
-  socket.on(
-    "participant-joined",
-    ({ roomId, role, userId, astrologerId, pricePerMinute }) => {
-      if (!billingStatus[roomId]) {
-        billingStatus[roomId] = {
-          userJoined: false,
-          astroJoined: false,
-          interval: null,
-          pricePerMinute: pricePerMinute || 10, // Default 10 coins per minute
-          userId: null,
-          astrologerId: null,
-        };
-      }
-
-      if (role === "user") {
-        billingStatus[roomId].userJoined = true;
-        billingStatus[roomId].userId = userId;
-        console.log(`👤 User joined: ${userId}`);
-      }
-
-      if (role === "astrologer") {
-        billingStatus[roomId].astroJoined = true;
-        // astrologerId should be the Astrologer document _id, not user _id
-        billingStatus[roomId].astrologerId = astrologerId;
-        console.log(`🔮 Astrologer joined: ${astrologerId}`);
-      }
-
-      socket.to(roomId).emit("participant-joined", { role });
-
-      console.log(`✅ ${role} joined room ${roomId}`);
-      console.log(`💰 Current billing status:`, billingStatus[roomId]);
-
-      checkStartBilling(roomId);
+ socket.on(
+  "participant-joined",
+  async ({ roomId, role, userId, astrologerId, pricePerMinute }) => {
+    if (!billingStatus[roomId]) {
+      billingStatus[roomId] = {
+        userJoined: false,
+        astroJoined: false,
+        interval: null,
+        pricePerMinute: pricePerMinute || 10,
+        userId: null,
+        astrologerId: null,
+      };
     }
-  );
+
+    if (role === "user") {
+      billingStatus[roomId].userJoined = true;
+      billingStatus[roomId].userId = userId;
+      console.log(`👤 User joined: ${userId}`);
+    }
+
+    if (role === "astrologer") {
+      billingStatus[roomId].astroJoined = true;
+      billingStatus[roomId].astrologerId = astrologerId;
+      console.log(`🔮 Astrologer joined: ${astrologerId}`);
+    }
+
+    // ✅ ADD THIS BLOCK (START)
+    if (
+      billingStatus[roomId].userJoined &&
+      billingStatus[roomId].astroJoined
+    ) {
+      await ChatSession.findOneAndUpdate(
+        { roomId },
+        {
+          status: "active",
+          startedAt: new Date(),
+          lastBilledAt: new Date(),
+          pricePerMinute: billingStatus[roomId].pricePerMinute,
+        }
+      );
+
+      console.log("🟢 ChatSession activated in DB:", roomId);
+    }
+    // ✅ ADD THIS BLOCK (END)
+
+    socket.to(roomId).emit("participant-joined", { role });
+
+    console.log(`✅ ${role} joined room ${roomId}`);
+    console.log(`💰 Current billing status:`, billingStatus[roomId]);
+
+    checkStartBilling(roomId);
+  }
+);
 
   /* ===============================
      SEND MESSAGE
@@ -246,6 +272,95 @@ io.on("connection", (socket) => {
   });
 });
 
+async function billingEngine() {
+  try {
+    const sessions = await ChatSession.find({ status: "active" });
+
+    for (const session of sessions) {
+      const now = new Date();
+      const elapsedSeconds = Math.floor(
+        (now - session.lastBilledAt) / 1000
+      );
+
+      if (elapsedSeconds < 60) continue;
+
+      const billableMinutes = Math.floor(elapsedSeconds / 60);
+      const coinsToDeduct = billableMinutes * session.pricePerMinute;
+
+      const mongoSession = await mongoose.startSession();
+      await mongoSession.withTransaction(async () => {
+        const user = await User.findById(session.userId).session(mongoSession);
+
+        if (!user || user.coins < coinsToDeduct) {
+          await ChatSession.updateOne(
+            { _id: session._id },
+            { status: "low_balance", endedAt: now },
+            { session: mongoSession }
+          );
+
+          io.to(session.roomId.toString()).emit("endChatDueToLowBalance");
+          return;
+        }
+
+        await User.updateOne(
+          { _id: session.userId },
+          { $inc: { coins: -coinsToDeduct } },
+          { session: mongoSession }
+        );
+
+        // 🔑 Fetch updated user balance inside the same transaction
+const updatedUser = await User.findById(session.userId).session(mongoSession);
+
+// 🧾 Record transaction ledger
+await Transaction.create(
+  [
+    {
+      userId: session.userId,
+      type: "DEBIT",
+      amount: coinsToDeduct, // coins (or paise if you unify later)
+      balanceAfter: updatedUser.coins,
+      reason: "chat-minute-charge",
+      metadata: {
+        chatSessionId: session._id,
+        astrologerId: session.astrologerId,
+        minutes: billableMinutes,
+        roomId: session.roomId,
+      },
+    },
+  ],
+  { session: mongoSession }
+);
+
+
+        await Astrologer.updateOne(
+          { _id: session.astrologerId },
+          { $inc: { earnings: coinsToDeduct } },
+          { session: mongoSession }
+        );
+
+        await ChatSession.updateOne(
+          { _id: session._id },
+          {
+            $inc: {
+              totalSeconds: billableMinutes * 60,
+              totalCoinsDeducted: coinsToDeduct,
+            },
+            lastBilledAt: now,
+          },
+          { session: mongoSession }
+        );
+      });
+
+      mongoSession.endSession();
+
+      io.to(session.roomId.toString()).emit("coinsUpdated");
+    }
+  } catch (err) {
+    console.error("❌ Billing engine error:", err);
+  }
+}
+
+
 /**
  * BILLING LOGIC
  */
@@ -270,101 +385,115 @@ async function checkStartBilling(roomId) {
   }, 1000);
 
   // Billing every minute (change to 10 seconds for testing)
-  room.interval = setInterval(async () => {
-    try {
-      console.log(`💰 Processing billing for room ${roomId}...`);
-      console.log(`💰 Looking for user ID: ${room.userId}`);
-      console.log(`💰 Looking for astrologer ID: ${room.astrologerId}`);
+  // room.interval = setInterval(async () => {
+  //   try {
+  //     console.log(`💰 Processing billing for room ${roomId}...`);
+  //     console.log(`💰 Looking for user ID: ${room.userId}`);
+  //     console.log(`💰 Looking for astrologer ID: ${room.astrologerId}`);
       
-      const user = await User.findById(room.userId);
-      // Find astrologer by their document _id, not user ID
-      const astrologer = await Astrologer.findById(room.astrologerId);
+  //     const user = await User.findById(room.userId);
+  //     // Find astrologer by their document _id, not user ID
+  //     const astrologer = await Astrologer.findById(room.astrologerId);
       
-      console.log(`💰 User found:`, user ? `Yes (coins: ${user.coins})` : "No");
-      console.log(`💰 Astrologer found:`, astrologer ? `Yes (earnings: ${astrologer.earnings || 0})` : "No");
+  //     console.log(`💰 User found:`, user ? `Yes (coins: ${user.coins})` : "No");
+  //     console.log(`💰 Astrologer found:`, astrologer ? `Yes (earnings: ${astrologer.earnings || 0})` : "No");
       
-      if (!user) {
-        console.log("❌ User not found - stopping billing");
-        clearInterval(room.interval);
-        clearInterval(room.timerInterval);
-        room.interval = null;
-        room.timerInterval = null;
-        return;
-      }
+  //     if (!user) {
+  //       console.log("❌ User not found - stopping billing");
+  //       clearInterval(room.interval);
+  //       clearInterval(room.timerInterval);
+  //       room.interval = null;
+  //       room.timerInterval = null;
+  //       return;
+  //     }
       
-      if (!astrologer) {
-        console.log("❌ Astrologer not found - stopping billing");
-        clearInterval(room.interval);
-        clearInterval(room.timerInterval);
-        room.interval = null;
-        room.timerInterval = null;
-        return;
-      }
+  //     if (!astrologer) {
+  //       console.log("❌ Astrologer not found - stopping billing");
+  //       clearInterval(room.interval);
+  //       clearInterval(room.timerInterval);
+  //       room.interval = null;
+  //       room.timerInterval = null;
+  //       return;
+  //     }
 
-      console.log(`💰 Current user coins: ${user.coins}, Price: ${room.pricePerMinute}`);
+  //     console.log(`💰 Current user coins: ${user.coins}, Price: ${room.pricePerMinute}`);
 
-      if (user.coins < room.pricePerMinute) {
-        console.log(`❌ Insufficient coins: ${user.coins} < ${room.pricePerMinute}`);
-        clearInterval(room.interval);
-        clearInterval(room.timerInterval);
-        room.interval = null;
-        room.timerInterval = null;
+  //     if (user.coins < room.pricePerMinute) {
+  //       console.log(`❌ Insufficient coins: ${user.coins} < ${room.pricePerMinute}`);
+  //       clearInterval(room.interval);
+  //       clearInterval(room.timerInterval);
+  //       room.interval = null;
+  //       room.timerInterval = null;
 
-        io.to(roomId).emit("endChatDueToLowBalance");
-        cleanupRoom(roomId);
-        return;
-      }
+  //       io.to(roomId).emit("endChatDueToLowBalance");
+  //       cleanupRoom(roomId);
+  //       return;
+  //     }
 
-      // Transfer coins from user to astrologer
-      const oldUserCoins = user.coins;
-      const oldAstrologerEarnings = astrologer.earnings || 0;
+  //     // Transfer coins from user to astrologer
+  //     const oldUserCoins = user.coins;
+  //     const oldAstrologerEarnings = astrologer.earnings || 0;
       
-      user.coins -= room.pricePerMinute;
-      astrologer.earnings = (astrologer.earnings || 0) + room.pricePerMinute;
+  //     user.coins -= room.pricePerMinute;
+  //     astrologer.earnings = (astrologer.earnings || 0) + room.pricePerMinute;
       
-      console.log(`💰 Before save - User coins: ${oldUserCoins} -> ${user.coins}`);
-      console.log(`💰 Before save - Astrologer earnings: ${oldAstrologerEarnings} -> ${astrologer.earnings}`);
+  //     console.log(`💰 Before save - User coins: ${oldUserCoins} -> ${user.coins}`);
+  //     console.log(`💰 Before save - Astrologer earnings: ${oldAstrologerEarnings} -> ${astrologer.earnings}`);
       
-      await user.save();
-      await astrologer.save();
+  //     await user.save();
+  //     await astrologer.save();
       
-      console.log(`💰 After save - User saved successfully`);
-      console.log(`💰 After save - Astrologer saved successfully`);
+  //     console.log(`💰 After save - User saved successfully`);
+  //     console.log(`💰 After save - Astrologer saved successfully`);
 
-      const updateData = {
-        userCoins: user.coins,
-        astrologerEarnings: astrologer.earnings
-      };
+  //     const updateData = {
+  //       userCoins: user.coins,
+  //       astrologerEarnings: astrologer.earnings
+  //     };
 
-      io.to(roomId).emit("coinsUpdated", updateData);
+  //     io.to(roomId).emit("coinsUpdated", updateData);
       
-      console.log(`💰 Transferred ${room.pricePerMinute} coins. New balances:`, updateData);
-      console.log(`💰 Emitted coinsUpdated to room: ${roomId}`);
-    } catch (err) {
-      console.log("Billing error:", err.message);
-      console.error("Full billing error:", err);
-    }
-  }, 60000); // 60 seconds = 1 minute for production billing
+  //     console.log(`💰 Transferred ${room.pricePerMinute} coins. New balances:`, updateData);
+  //     console.log(`💰 Emitted coinsUpdated to room: ${roomId}`);
+  //   } catch (err) {
+  //     console.log("Billing error:", err.message);
+  //     console.error("Full billing error:", err);
+  //   }
+  // }, 60000); // 60 seconds = 1 minute for production billing
 }
 
 /**
  * ROOM CLEANUP
  */
-function cleanupRoom(roomId) {
+async function cleanupRoom(roomId) {
+  // 🛑 HARD GUARD — never trust sockets
+  if (!roomId || !mongoose.Types.ObjectId.isValid(roomId)) {
+    console.warn("⚠️ cleanupRoom skipped due to invalid roomId:", roomId);
+    return;
+  }
+
   if (billingStatus[roomId]) {
-    // Clear billing interval
     if (billingStatus[roomId].interval) {
       clearInterval(billingStatus[roomId].interval);
     }
-    // Clear timer interval
     if (billingStatus[roomId].timerInterval) {
       clearInterval(billingStatus[roomId].timerInterval);
     }
-    // Remove room from memory
     delete billingStatus[roomId];
-    console.log("🧹 Cleaned up room:", roomId);
+    console.log("🧹 Cleaned up room memory:", roomId);
   }
+
+  // ✅ End chat session safely
+  await ChatSession.findOneAndUpdate(
+    { roomId, status: "active" },
+    { status: "ended", endedAt: new Date() }
+  );
+
+  console.log("🛑 ChatSession ended in DB:", roomId);
 }
+
+
+setInterval(billingEngine, 10000);
 
 // Bind to 0.0.0.0 so other devices on the LAN can connect
 const PORT = process.env.PORT || 5000;
