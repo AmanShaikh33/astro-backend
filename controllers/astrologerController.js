@@ -180,3 +180,17 @@ export const getApprovedAstrologers = async (req, res) => {
     res.status(500).json({ message: "Failed to fetch approved astrologers" });
   }
 };
+
+// Get Astrologer Earnings
+export const getAstrologerEarnings = async (req, res) => {
+  try {
+    const astrologer = await Astrologer.findOne({ userId: req.user.id });
+    if (!astrologer) {
+      return res.status(404).json({ message: "Astrologer profile not found" });
+    }
+    res.status(200).json({ earnings: astrologer.earnings || 0 });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Failed to fetch earnings" });
+  }
+};

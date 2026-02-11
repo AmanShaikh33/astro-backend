@@ -2,6 +2,88 @@ import { ChatRoom } from "../models/ChatRoom.js";
 import { Message } from "../models/Message.js";
 import Astrologer from "../models/Astrologer.js"; // add this line
 import ChatSession from "../models/ChatSession.js";
+import { startChatBilling } from "../sockets/billing.js";
+import { stopChatBilling } from "../sockets/billing.js";
+
+
+export const acceptChatRequest = async (req, res) => {
+  const { requestId } = req.body;
+
+  const activeSession = await ChatSession.findOne({
+  user: request.user,
+  status: "active",
+});
+
+if (activeSession) {
+  return res.status(400).json({
+    message: "User already has an active chat session",
+  });
+}
+
+
+  const request = await ChatRequest.findById(requestId);
+  if (!request || request.status !== "pending") {
+    return res.status(400).json({ message: "Invalid request" });
+  }
+
+  // 1️⃣ Mark request accepted
+  request.status = "accepted";
+  await request.save();
+
+  // 2️⃣ Get astrologer rate (DO NOT hardcode later)
+  const astrologer = await Astrologer.findById(request.astrologer);
+
+  // 3️⃣ Create chat session
+  const session = await ChatSession.create({
+  user: request.user,
+  astrologer: request.astrologer,
+  startTime: new Date(),
+  coinsPerMinute: astrologer.pricePerMinute,
+  status: "active",
+});
+
+
+  // 4️⃣ Notify frontend to join session room
+  req.io.to(`user_${request.user}`).emit("chat-accepted", {
+    sessionId: session._id,
+    astrologerId: request.astrologer,
+  });
+
+  req.io.to(`astro_${request.astrologer}`).emit("chat-accepted", {
+    sessionId: session._id,
+    userId: request.user,
+  });
+
+  // 5️⃣ START BILLING (THIS IS THE KEY)
+  startChatBilling(session._id.toString(), req.io);
+
+  res.json({
+    message: "Chat accepted",
+    sessionId: session._id,
+  });
+};
+
+export const endChatSession = async (req, res) => {
+  const { sessionId } = req.body;
+
+  const session = await ChatSession.findById(sessionId);
+  if (!session || session.status === "ended") {
+    return res.status(400).json({ message: "Invalid session" });
+  }
+
+  session.status = "ended";
+  session.endTime = new Date();
+  await session.save();
+
+  stopChatBilling(sessionId);
+
+  req.io.to(sessionId).emit("chat-ended", {
+    totalMinutes: session.totalMinutes,
+    totalCoins: session.totalCoinsDeducted,
+  });
+
+  res.json({ message: "Chat ended" });
+};
 
 
 // ✅ Create or get a chat room
@@ -57,17 +139,7 @@ export const createOrGetChatRoom = async (req, res) => {
       console.log("✅ Existing ChatRoom found:", chatRoom._id);
     }
 
-    await ChatSession.findOneAndUpdate(
-  { roomId: chatRoom._id },
-  {
-    roomId: chatRoom._id,
-    userId: finalUserId,
-    astrologerId: finalAstroId,
-    pricePerMinute: chatRoom.astrologer.pricePerMinute,
-    status: "waiting",
-  },
-  { upsert: true, new: true }
-);
+    
 
 
     res.status(200).json(chatRoom);

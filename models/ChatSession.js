@@ -1,27 +1,53 @@
-// models/ChatSession.js
 import mongoose from "mongoose";
 
 const chatSessionSchema = new mongoose.Schema(
   {
-    roomId: { type: mongoose.Schema.Types.ObjectId, ref: "ChatRoom", required: true },
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
 
-    userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
-    astrologerId: { type: mongoose.Schema.Types.ObjectId, ref: "Astrologer", required: true },
+    astrologer: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Astrologer",
+      required: true,
+    },
 
-    pricePerMinute: { type: Number, required: true },
+    startTime: {
+      type: Date,
+      required: true,
+    },
 
-    startedAt: { type: Date },
-    endedAt: { type: Date },
+    endTime: {
+      type: Date,
+    },
 
-    lastBilledAt: { type: Date }, // 🔑 IMPORTANT
-    totalSeconds: { type: Number, default: 0 },
-    totalCoinsDeducted: { type: Number, default: 0 },
+    totalMinutes: {
+      type: Number,
+      default: 0,
+    },
+
+    coinsPerMinute: {
+      type: Number,
+      required: true,
+    },
+
+    totalCoinsDeducted: {
+      type: Number,
+      default: 0,
+    },
+
+    totalCoinsEarned: {
+      type: Number,
+      default: 0,
+    },
 
     status: {
       type: String,
-      enum: ["waiting", "active", "ended", "low_balance"],
-      default: "waiting"
-    }
+      enum: ["active", "ended"],
+      default: "active",
+    },
   },
   { timestamps: true }
 );

@@ -1,5 +1,5 @@
 import express from "express";
-import { createProfile, getMyProfile, updateProfile, deleteProfile, getAllAstrologers,updateAvailability,getApprovedAstrologers } from "../controllers/astrologerController.js";
+import { createProfile, getMyProfile, updateProfile, deleteProfile, getAllAstrologers,updateAvailability,getApprovedAstrologers, getAstrologerEarnings } from "../controllers/astrologerController.js";
 import { protect, verifyRole } from "../middlewares/authMiddleware.js";
 import upload from "../middlewares/uploadMiddleware.js";
 import Astrologer from "../models/Astrologer.js";
@@ -12,6 +12,7 @@ router.get("/my-profile", protect, verifyRole(["astrologer"]), getMyProfile);
 router.put("/profile", protect, verifyRole(["astrologer"]), upload.single("profilePic"), updateProfile);
 router.delete("/profile", protect, verifyRole(["astrologer"]), deleteProfile);
 router.put("/status", protect, verifyRole(["astrologer"]), updateAvailability);
+router.get("/earnings", protect, verifyRole(["astrologer"]), getAstrologerEarnings);
 router.get("/approved", getApprovedAstrologers);
 
 // For users: get all astrologers

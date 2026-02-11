@@ -46,6 +46,10 @@ const astrologerSchema = new mongoose.Schema({
   earnings: {
     type: Number,
     default: 0
+  },
+  coins: {
+    type: Number,
+    default: 0
   }
 }, { timestamps: true });
 

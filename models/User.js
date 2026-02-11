@@ -3,14 +3,14 @@ import mongoose from "mongoose";
 const transactionSchema = new mongoose.Schema(
   {
     type: {
-  type: String,
-  enum: ["TOPUP", "CHAT_DEBIT"],
-  required: true,
-},
-
-    amount: { type: Number, required: true }, // rupees
-    coins: { type: Number, required: true }, // coins credited
+      type: String,
+      enum: ["TOPUP", "CHAT_DEBIT", "CHAT_CREDIT"],
+      required: true,
+    },
+    amount: { type: Number, required: true },
+    coins: { type: Number, required: true },
     razorpayPaymentId: { type: String },
+    sessionId: { type: mongoose.Schema.Types.ObjectId, ref: "ChatSession" },
   },
   { timestamps: true }
 );
