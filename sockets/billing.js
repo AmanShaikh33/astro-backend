@@ -20,56 +20,66 @@ export const startChatBilling = (sessionId, io) => {
 
   // Billing every minute
   const interval = setInterval(async () => {
-    const session = await ChatSession.findById(sessionId);
-    if (!session || session.status !== "active") {
-      clearInterval(interval);
-      clearInterval(timerIntervals.get(sessionId));
-      activeBillingLoops.delete(sessionId);
-      timerIntervals.delete(sessionId);
-      return;
-    }
+    try {
+      const session = await ChatSession.findById(sessionId);
+      if (!session || session.status !== "active") {
+        console.log("⚠️ Billing loop detected inactive session:", sessionId, "Status:", session?.status);
+        clearInterval(interval);
+        clearInterval(timerIntervals.get(sessionId));
+        activeBillingLoops.delete(sessionId);
+        timerIntervals.delete(sessionId);
+        return;
+      }
 
-    const user = await User.findById(session.user);
-    if (user.coins < session.coinsPerMinute) {
-      io.to(sessionId).emit("force-end-chat", {
-        reason: "INSUFFICIENT_COINS",
+      const user = await User.findById(session.user);
+      if (user.coins < session.coinsPerMinute) {
+        io.to(sessionId).emit("force-end-chat", {
+          reason: "INSUFFICIENT_COINS",
+        });
+        session.status = "ended";
+        session.endTime = new Date();
+        await session.save();
+        clearInterval(interval);
+        clearInterval(timerIntervals.get(sessionId));
+        activeBillingLoops.delete(sessionId);
+        timerIntervals.delete(sessionId);
+        console.log("🛑 Billing stopped due to insufficient coins:", sessionId);
+        return;
+      }
+
+      user.coins -= session.coinsPerMinute;
+      user.transactions.push({
+        type: "CHAT_DEBIT",
+        amount: 0,
+        coins: -session.coinsPerMinute,
+        sessionId: session._id,
       });
-      session.status = "ended";
-      session.endTime = new Date();
+      await user.save();
+
+      const astrologer = await Astrologer.findById(session.astrologer);
+      astrologer.coins += session.coinsPerMinute;
+      astrologer.earnings += session.coinsPerMinute;
+      await astrologer.save();
+
+      session.totalMinutes += 1;
+      session.totalCoinsDeducted += session.coinsPerMinute;
+      session.totalCoinsEarned += session.coinsPerMinute;
       await session.save();
+
+      io.to(sessionId).emit("minute-billed", {
+        minutes: session.totalMinutes,
+        coinsLeft: user.coins,
+        astrologerEarnings: astrologer.coins,
+      });
+
+      console.log(`💰 Billed: ${session.coinsPerMinute} coins | User: ${user.coins} left | Astrologer earned: ${astrologer.coins}`);
+    } catch (err) {
+      console.error("❌ Billing error for session:", sessionId, err);
       clearInterval(interval);
       clearInterval(timerIntervals.get(sessionId));
       activeBillingLoops.delete(sessionId);
       timerIntervals.delete(sessionId);
-      return;
     }
-
-    user.coins -= session.coinsPerMinute;
-    user.transactions.push({
-      type: "CHAT_DEBIT",
-      amount: 0,
-      coins: -session.coinsPerMinute,
-      sessionId: session._id,
-    });
-    await user.save();
-
-    const astrologer = await Astrologer.findById(session.astrologer);
-    astrologer.coins += session.coinsPerMinute;
-    astrologer.earnings += session.coinsPerMinute;
-    await astrologer.save();
-
-    session.totalMinutes += 1;
-    session.totalCoinsDeducted += session.coinsPerMinute;
-    session.totalCoinsEarned += session.coinsPerMinute;
-    await session.save();
-
-    io.to(sessionId).emit("minute-billed", {
-      minutes: session.totalMinutes,
-      coinsLeft: user.coins,
-      astrologerEarnings: astrologer.coins,
-    });
-
-    console.log(`💰 Billed: ${session.coinsPerMinute} coins | User: ${user.coins} left | Astrologer earned: ${astrologer.coins}`);
   }, 60_000);
 
   activeBillingLoops.set(sessionId, interval);

@@ -164,11 +164,29 @@ io.on("connection", (socket) => {
         return;
       }
 
+      // Check if request is still pending
+      if (chatRequest.status !== "pending") {
+        console.error("❌ Chat request already processed:", requestId);
+        return;
+      }
+
       await ChatRequest.findByIdAndUpdate(requestId, { status: "accepted" });
       
       const astrologer = await Astrologer.findById(chatRequest.astrologer);
       if (!astrologer) {
         console.error("❌ Astrologer not found:", chatRequest.astrologer);
+        return;
+      }
+
+      // Check if user still has enough coins
+      const user = await User.findById(userId);
+      if (user.coins < astrologer.pricePerMinute) {
+        io.to(`user_${userId}`).emit("insufficient-coins", {
+          message: "Insufficient coins to start chat",
+          required: astrologer.pricePerMinute,
+          current: user.coins
+        });
+        console.log("❌ User has insufficient coins at acceptance:", user.coins);
         return;
       }
 
@@ -181,20 +199,20 @@ io.on("connection", (socket) => {
       });
 
       console.log("💰 Chat session created:", chatSession._id);
+      console.log("💸 Starting billing - Rate:", astrologer.pricePerMinute, "coins/min");
       
+      // START BILLING ONLY AFTER SESSION IS CREATED
       startChatBilling(chatSession._id.toString(), io);
-      console.log("💸 Billing started for session:", chatSession._id);
       
       io.to(`user_${userId}`).emit("chat-accepted", {
         sessionId: chatSession._id.toString(),
       });
       
-      // Emit to the socket that accepted (astrologer's current socket)
       socket.emit("session-created", {
         sessionId: chatSession._id.toString(),
       });
       
-      console.log("📤 Sent chat-accepted to user:", userId, "and session-created to astrologer socket:", socket.id);
+      console.log("📤 Sent chat-accepted to user:", userId, "and session-created to astrologer");
     } catch (err) {
       console.error("❌ astrologerAcceptsChat error:", err);
     }
@@ -236,14 +254,25 @@ io.on("connection", (socket) => {
     try {
       console.log("🔚 End chat requested:", roomId, "by:", endedBy);
       
+      if (!roomId) {
+        console.error("❌ Cannot end chat: roomId is empty");
+        return;
+      }
+      
       const session = await ChatSession.findById(roomId);
       if (!session) {
         console.error("❌ Session not found:", roomId);
         return;
       }
+      
+      if (session.status === "ended") {
+        console.log("⚠️ Session already ended:", roomId);
+        return;
+      }
 
-      // Stop billing
+      // Stop billing FIRST
       stopChatBilling(roomId);
+      console.log("🛑 Billing stopped for:", roomId);
       
       // Update session
       session.status = "ended";
