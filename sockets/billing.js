@@ -10,7 +10,7 @@ export const startChatBilling = (sessionId, io) => {
 
   let elapsedSeconds = 0;
 
-  // Timer every second
+
   const timerInterval = setInterval(() => {
     elapsedSeconds++;
     io.to(sessionId).emit("timer-tick", { elapsedSeconds });
@@ -18,7 +18,7 @@ export const startChatBilling = (sessionId, io) => {
 
   timerIntervals.set(sessionId, timerInterval);
 
-  // Billing every minute
+  
   const interval = setInterval(async () => {
     try {
       const session = await ChatSession.findById(sessionId);

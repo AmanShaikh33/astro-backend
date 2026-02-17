@@ -9,14 +9,14 @@ const createAdminUser = async () => {
   try {
     await connectDb();
     
-    // Check if admin already exists
+    
     const adminExists = await User.findOne({ email: "Admin@astrotalk.com" });
     if (adminExists) {
       console.log("Admin user already exists");
       return;
     }
 
-    // Create admin user
+  
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash("Admin@123", salt);
 

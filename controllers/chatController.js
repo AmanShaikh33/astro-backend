@@ -86,7 +86,7 @@ export const endChatSession = async (req, res) => {
 };
 
 
-// ✅ Create or get a chat room
+
 export const createOrGetChatRoom = async (req, res) => {
   try {
     const { astrologerId, userId } = req.body;
@@ -154,7 +154,7 @@ export const createOrGetChatRoom = async (req, res) => {
   }
 };
 
-// ✅ Send message
+
 export const sendMessage = async (req, res) => {
   try {
     const { chatRoomId, receiverId, content } = req.body;
@@ -186,16 +186,14 @@ export const sendMessage = async (req, res) => {
   }
 };
 
-// ✅ Get all messages
-// ✅ Get all messages
+
 export const getMessages = async (req, res) => {
   try {
     const { chatRoomId } = req.params;
     const messages = await Message.find({ chatRoomId })
       .sort({ createdAt: 1 })
-      .lean(); // <-- makes plain JS objects, not Mongoose docs
-
-    // ✅ Normalize sender/receiver IDs to plain strings
+      .lean(); 
+    
     const formatted = messages.map(msg => ({
       ...msg,
       senderId: msg.sender.toString(),
@@ -208,7 +206,7 @@ export const getMessages = async (req, res) => {
   }
 };
 
-// ✅ Get user or astrologer chats
+
 export const getUserChats = async (req, res) => {
   try {
     let userId = req.user._id || req.user.id;

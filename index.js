@@ -26,9 +26,7 @@ dotenv.config();
 const app = express();
 connectDb();
 
-/* ===============================
-   ADMIN AUTO CREATE
-================================ */
+
 const createAdminUser = async () => {
   const exists = await User.findOne({ email: "Admin@astrotalk.com" });
   if (!exists) {
@@ -45,9 +43,7 @@ const createAdminUser = async () => {
 };
 setTimeout(createAdminUser, 2000);
 
-/* ===============================
-   EXPRESS SETUP
-================================ */
+
 app.use(cors());
 app.use(express.json());
 
@@ -58,26 +54,22 @@ app.use((req, _, next) => {
 
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
-/* ===============================
-   SOCKET.IO SETUP
-================================ */
+
 const server = createServer(app);
 const io = new Server(server, {
   cors: { origin: "*", methods: ["GET", "POST"] },
 });
 
-/* Resume billing for active sessions on server restart */
+
 setTimeout(() => resumeActiveBilling(io), 3000);
 
-/* 🔑 make io available in controllers */
+
 app.use((req, res, next) => {
   req.io = io;
   next();
 });
 
-/* ===============================
-   ROUTES
-================================ */
+
 app.use("/api/auth", authRoutes);
 app.use("/api/astrologers", astrologerRoutes);
 app.use("/api/admin", adminRoutes);
@@ -86,24 +78,22 @@ app.use("/api/payments", paymentRoutes);
 
 app.get("/", (_, res) => res.send("AstroTalk Backend Running"));
 
-/* ===============================
-   SOCKET EVENTS (DUMB SOCKETS)
-================================ */
+
 io.on("connection", (socket) => {
   console.log("🔌 Socket connected:", socket.id);
 
-  /* astrologer presence */
+
   socket.on("astrologerOnline", ({ astrologerId }) => {
     socket.join(`astro_${astrologerId}`);
   });
 
-  /* user presence */
+
   socket.on("userOnline", ({ userId }) => {
     socket.join(`user_${userId}`);
     console.log("👤 User joined room:", `user_${userId}`);
   });
 
-  /* join chat session */
+
   socket.on("joinSession", ({ sessionId }) => {
     socket.join(sessionId);
     console.log("👥 Joined session:", sessionId);
@@ -113,7 +103,7 @@ io.on("connection", (socket) => {
   try {
     console.log("📨 Chat request from user:", userId, "to astrologer:", astrologerId);
 
-    // Check if user has enough coins
+    
     const user = await User.findById(userId);
     const astrologer = await Astrologer.findById(astrologerId);
     
@@ -134,39 +124,39 @@ io.on("connection", (socket) => {
       return;
     }
 
-    // Create chat request in DB
+    
     const chatRequest = await ChatRequest.create({
       user: userId,
       astrologer: astrologerId,
       status: "pending",
     });
 
-    // Emit alert ONLY to that astrologer
+    
     io.to(`astro_${astrologerId}`).emit("incomingChatRequest", {
       requestId: chatRequest._id,
       userId,
       userName,
     });
 
-    console.log("📣 Alert sent to:", `astro_${astrologerId}`);
+    console.log("Alert sent to:", `astro_${astrologerId}`);
   } catch (err) {
-    console.error("❌ userRequestsChat error:", err);
+    console.error("userRequestsChat error:", err);
   }
 });
 
   socket.on("astrologerAcceptsChat", async ({ requestId, userId }) => {
     try {
-      console.log("✅ Astrologer accepted chat, requestId:", requestId);
+      console.log("Astrologer accepted chat, requestId:", requestId);
       
       const chatRequest = await ChatRequest.findById(requestId).populate('astrologer');
       if (!chatRequest) {
-        console.error("❌ Chat request not found:", requestId);
+        console.error("Chat request not found:", requestId);
         return;
       }
 
       // Check if request is still pending
       if (chatRequest.status !== "pending") {
-        console.error("❌ Chat request already processed:", requestId);
+        console.error("Chat request already processed:", requestId);
         return;
       }
 
@@ -174,11 +164,11 @@ io.on("connection", (socket) => {
       
       const astrologer = await Astrologer.findById(chatRequest.astrologer);
       if (!astrologer) {
-        console.error("❌ Astrologer not found:", chatRequest.astrologer);
+        console.error("Astrologer not found:", chatRequest.astrologer);
         return;
       }
 
-      // Check if user still has enough coins
+      
       const user = await User.findById(userId);
       if (user.coins < astrologer.pricePerMinute) {
         io.to(`user_${userId}`).emit("insufficient-coins", {
@@ -186,7 +176,7 @@ io.on("connection", (socket) => {
           required: astrologer.pricePerMinute,
           current: user.coins
         });
-        console.log("❌ User has insufficient coins at acceptance:", user.coins);
+        console.log("User has insufficient coins at acceptance:", user.coins);
         return;
       }
 
@@ -198,10 +188,10 @@ io.on("connection", (socket) => {
         status: "active",
       });
 
-      console.log("💰 Chat session created:", chatSession._id);
-      console.log("💸 Starting billing - Rate:", astrologer.pricePerMinute, "coins/min");
+      console.log("Chat session created:", chatSession._id);
+      console.log("Starting billing - Rate:", astrologer.pricePerMinute, "coins/min");
       
-      // START BILLING ONLY AFTER SESSION IS CREATED
+    
       startChatBilling(chatSession._id.toString(), io);
       
       io.to(`user_${userId}`).emit("chat-accepted", {
@@ -212,14 +202,14 @@ io.on("connection", (socket) => {
         sessionId: chatSession._id.toString(),
       });
       
-      console.log("📤 Sent chat-accepted to user:", userId, "and session-created to astrologer");
+      console.log("Sent chat-accepted to user:", userId, "and session-created to astrologer");
     } catch (err) {
-      console.error("❌ astrologerAcceptsChat error:", err);
+      console.error(" astrologerAcceptsChat error:", err);
     }
   });
 
 
-  /* messaging */
+ 
   socket.on("sendMessage", async (data) => {
     try {
       const { sessionId, senderId, receiverId, content } = data;
@@ -245,54 +235,53 @@ io.on("connection", (socket) => {
         createdAt: message.createdAt,
       });
     } catch (err) {
-      console.error("❌ Message error:", err);
+      console.error("Message error:", err);
     }
   });
 
-  /* end chat */
+  
   socket.on("endChat", async ({ roomId, endedBy }) => {
     try {
-      console.log("🔚 End chat requested:", roomId, "by:", endedBy);
+      console.log(" End chat requested:", roomId, "by:", endedBy);
       
       if (!roomId) {
-        console.error("❌ Cannot end chat: roomId is empty");
+        console.error("Cannot end chat: roomId is empty");
         return;
       }
       
       const session = await ChatSession.findById(roomId);
       if (!session) {
-        console.error("❌ Session not found:", roomId);
+        console.error(" Session not found:", roomId);
         return;
       }
       
       if (session.status === "ended") {
-        console.log("⚠️ Session already ended:", roomId);
+        console.log(" Session already ended:", roomId);
         return;
       }
 
-      // Stop billing FIRST
-      stopChatBilling(roomId);
-      console.log("🛑 Billing stopped for:", roomId);
       
-      // Update session
+      stopChatBilling(roomId);
+      console.log(" Billing stopped for:", roomId);
+      
+      
       session.status = "ended";
       session.endTime = new Date();
       await session.save();
 
-      // Notify both parties
+      
       io.to(roomId).emit("chatEnded", {
         endedBy,
         sessionEarnings: session.totalCoinsEarned,
         totalCoins: session.totalCoinsDeducted,
       });
 
-      console.log("✅ Chat ended successfully:", roomId);
+      console.log("Chat ended successfully:", roomId);
     } catch (err) {
-      console.error("❌ endChat error:", err);
+      console.error("endChat error:", err);
     }
   });
 
-  /* force end chat due to insufficient coins */
   socket.on("force-end-chat", async ({ sessionId }) => {
     try {
       const session = await ChatSession.findById(sessionId);
@@ -303,19 +292,17 @@ io.on("connection", (socket) => {
         await session.save();
       }
     } catch (err) {
-      console.error("❌ force-end-chat error:", err);
+      console.error(" force-end-chat error:", err);
     }
   });
 
   socket.on("disconnect", () => {
-    console.log("❌ Socket disconnected:", socket.id);
+    console.log("Socket disconnected:", socket.id);
   });
 });
 
 
-/* ===============================
-   SERVER START
-================================ */
+
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, "0.0.0.0", () =>
   console.log(`🚀 Server running on ${PORT}`)

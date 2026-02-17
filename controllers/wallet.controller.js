@@ -4,9 +4,6 @@ import User from "../models/User.js";
 import Payment from "../models/Payment.js";
 import adjustBalance from "../utils/adjustBalance.js";
 
-// -------------------------------------
-// Create Razorpay Order
-// -------------------------------------
 export const createOrder = async (req, res) => {
   try {
     const { amount, userId } = req.body;
@@ -15,13 +12,13 @@ export const createOrder = async (req, res) => {
       return res.status(400).json({ error: "Invalid amount" });
 
     const order = await razorpay.orders.create({
-      amount: amount * 100, // rupees → paise
+      amount: amount * 100, 
       currency: "INR",
       receipt: "order_" + Date.now(),
       notes: { userId },
     });
 
-    // Save payment record
+ 
     await Payment.create({
       orderId: order.id,
       userId,
@@ -40,16 +37,14 @@ export const createOrder = async (req, res) => {
   }
 };
 
-// -------------------------------------
-// Razorpay Webhook
-// -------------------------------------
+
 export const razorpayWebhook = async (req, res) => {
   const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
   const signature = req.headers["x-razorpay-signature"];
 
   const expected = crypto
     .createHmac("sha256", secret)
-    .update(req.body) // raw body, not JSON
+    .update(req.body) 
     .digest("hex");
 
   if (signature !== expected) {
@@ -64,7 +59,7 @@ export const razorpayWebhook = async (req, res) => {
     const userId = payment.notes.userId;
     const amount = payment.amount;
 
-    // Update payment record
+    
     await Payment.findOneAndUpdate(
       { orderId: payment.order_id },
       {
@@ -73,7 +68,7 @@ export const razorpayWebhook = async (req, res) => {
       }
     );
 
-    // Add money to wallet
+
     await adjustBalance(userId, amount, "TOPUP", {
       paymentId: payment.id,
       orderId: payment.order_id,
@@ -85,9 +80,7 @@ export const razorpayWebhook = async (req, res) => {
   return res.json({ status: "ignored_event" });
 };
 
-// -------------------------------------
-// Get Wallet Balance
-// -------------------------------------
+
 export const getBalance = async (req, res) => {
   try {
     const { userId } = req.params;

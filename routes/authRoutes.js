@@ -9,7 +9,6 @@ router.post("/register", registerUser);
 router.post("/login", loginUser);
 router.get("/me", protect, getMe);
 
-// Get user by ID
 router.get("/user/:id", protect, async (req, res) => {
   try {
     const user = await User.findById(req.params.id).select("-password");
@@ -22,7 +21,7 @@ router.get("/user/:id", protect, async (req, res) => {
   }
 });
 
-// Example: Admin-only route
+
 router.get("/admin-data", protect, verifyRole(["admin"]), (req, res) => {
   res.json({ message: "Welcome Admin!" });
 });

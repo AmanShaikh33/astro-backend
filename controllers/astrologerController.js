@@ -2,7 +2,7 @@ import Astrologer from "../models/Astrologer.js";
 import fs from "fs";
 
 
-// Create Profile
+
 export const createProfile = async (req, res) => {
   try {
     const { name, bio, skills, languages, pricePerMinute, experience } = req.body;
@@ -34,7 +34,7 @@ export const createProfile = async (req, res) => {
   }
 };
 
-// Get My Profile
+
 export const getMyProfile = async (req, res) => {
   try {
     const astrologer = await Astrologer.findOne({ userId: req.user.id });
@@ -46,7 +46,7 @@ export const getMyProfile = async (req, res) => {
   }
 };
 
-// Update Profile
+
 export const updateProfile = async (req, res) => {
   try {
     const astrologer = await Astrologer.findOne({ userId: req.user.id });
@@ -56,10 +56,10 @@ export const updateProfile = async (req, res) => {
 
     const { name, bio, skills, languages, pricePerMinute, experience, availability } = req.body;
 
-    // ✅ Always allow updating name
+    
     if (name) astrologer.name = name;
 
-    // ✅ Block other fields if profile is not approved
+  
     if (astrologer.isApproved === "approved") {
       astrologer.bio = bio || astrologer.bio;
       astrologer.skills = skills ? skills.split(",") : astrologer.skills;
@@ -92,8 +92,7 @@ export const deleteProfile = async (req, res) => {
   }
 };
 
-// Get All Astrologers (for user browsing)
-// Get All Approved Astrologers with Filters
+
 export const getAllAstrologers = async (req, res) => {
   try {
     const { skills, languages, priceMin, priceMax, availability, page = 1, limit = 10 } = req.query;
@@ -101,7 +100,7 @@ export const getAllAstrologers = async (req, res) => {
     let filter = { isApproved: "approved" };
 
     if (skills) {
-      filter.skills = { $regex: skills, $options: "i" }; // case-insensitive
+      filter.skills = { $regex: skills, $options: "i" }; 
     }
 
     if (languages) {
@@ -109,7 +108,7 @@ export const getAllAstrologers = async (req, res) => {
     }
 
     if (availability) {
-      filter.availability = availability; // online or offline
+      filter.availability = availability; 
     }
 
     if (priceMin || priceMax) {
@@ -140,7 +139,7 @@ export const getAllAstrologers = async (req, res) => {
   }
 };
 
-// Update Availability
+
 export const updateAvailability = async (req, res) => {
   try {
     const { availability } = req.body;
@@ -170,7 +169,6 @@ export const updateAvailability = async (req, res) => {
   }
 };
 
-// Get Approved Astrologers
 export const getApprovedAstrologers = async (req, res) => {
   try {
     const astrologers = await Astrologer.find({ isApproved: "approved" });
@@ -181,7 +179,6 @@ export const getApprovedAstrologers = async (req, res) => {
   }
 };
 
-// Get Astrologer Earnings
 export const getAstrologerEarnings = async (req, res) => {
   try {
     const astrologer = await Astrologer.findOne({ userId: req.user.id });

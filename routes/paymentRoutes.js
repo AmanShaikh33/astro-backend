@@ -10,10 +10,10 @@ router.get("/test", (req, res) => {
 });
 
 
-// Create Razorpay Order
+
 router.post("/create-order", async (req, res) => {
   try {
-    const { amount } = req.body; // rupees
+    const { amount } = req.body; 
 
     const instance = new Razorpay({
       key_id: process.env.RAZORPAY_KEY_ID,
@@ -21,7 +21,7 @@ router.post("/create-order", async (req, res) => {
     });
 
     const order = await instance.orders.create({
-      amount: amount * 100, // convert to paise
+      amount: amount * 100, 
       currency: "INR",
       receipt: "receipt_" + Date.now(),
     });
@@ -33,7 +33,7 @@ router.post("/create-order", async (req, res) => {
   }
 });
 
-// Verify Payment + Add Coins
+
 router.post("/verify", async (req, res) => {
   try {
     const {

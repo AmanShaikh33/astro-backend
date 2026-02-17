@@ -14,19 +14,11 @@ import {
 
 const router = express.Router();
 
-/* ===============================
-   CHAT REQUEST / SESSION LIFECYCLE
-================================ */
-
-// astrologer accepts chat
 router.post("/accept", protect, acceptChatRequest);
 
-// user / astrologer ends chat
 router.post("/end", protect, endChatSession);
 
-/* ===============================
-   CHAT ROOMS & MESSAGES
-================================ */
+
 
 router.post("/create-room", protect, createOrGetChatRoom);
 router.post("/send", protect, sendMessage);
@@ -55,7 +47,6 @@ router.get("/astrologer-history", protect, async (req, res) => {
     const userId = req.user.id || req.user._id;
     console.log("🔍 Looking for astrologer with userId:", userId);
     
-    // First find the Astrologer document by userId
     const astrologer = await Astrologer.findOne({ userId });
     if (!astrologer) {
       console.log("⚠️ No astrologer profile found for userId:", userId);
@@ -63,8 +54,7 @@ router.get("/astrologer-history", protect, async (req, res) => {
     }
     
     console.log("✅ Found astrologer:", astrologer._id);
-    
-    // Now find sessions with this astrologer's _id
+  
     const sessions = await ChatSession.find({ astrologer: astrologer._id, status: "ended" })
       .populate("user", "name")
       .sort({ startTime: -1 });

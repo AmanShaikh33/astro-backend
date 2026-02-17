@@ -1,5 +1,5 @@
 import Astrologer from "../models/Astrologer.js";
-// 1. Get all pending astrologers
+
 export const getPendingAstrologers = async (req, res) => {
   try {
     const astrologers = await Astrologer.find({ isApproved: "pending" });
@@ -10,7 +10,7 @@ export const getPendingAstrologers = async (req, res) => {
 };
 
 
-// 2. Approve astrologer
+
 export const approveAstrologer = async (req, res) => {
   try {
     const astrologer = await Astrologer.findById(req.params.id);
@@ -28,7 +28,6 @@ export const approveAstrologer = async (req, res) => {
   }
 };
 
-// 3. Reject astrologer (delete profile)
 export const rejectAstrologer = async (req, res) => {
   try {
     const astrologer = await Astrologer.findById(req.params.id);
