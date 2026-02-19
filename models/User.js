@@ -29,6 +29,9 @@ const userSchema = new mongoose.Schema(
 
     coins: { type: Number, default: 0 },
     transactions: [transactionSchema],
+
+     resetPasswordToken: { type: String },
+    resetPasswordExpire: { type: Date },
   },
   { timestamps: true }
 );

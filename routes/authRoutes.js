@@ -1,5 +1,5 @@
 import express from "express";
-import { registerUser, loginUser, getMe } from "../controllers/authController.js";
+import { registerUser, loginUser, getMe,  forgotPassword, resetPassword} from "../controllers/authController.js";
 import { protect, verifyRole } from "../middlewares/authMiddleware.js";
 import User from "../models/User.js";
 
@@ -8,6 +8,12 @@ const router = express.Router();
 router.post("/register", registerUser);
 router.post("/login", loginUser);
 router.get("/me", protect, getMe);
+router.post("/forgot-password", forgotPassword);
+router.post("/reset-password/:token", resetPassword);
+
+router.get("/reset-password/:token", (req, res) => {
+  res.send("Reset token received. Please return to the mobile app to set a new password.");
+});
 
 router.get("/user/:id", protect, async (req, res) => {
   try {
