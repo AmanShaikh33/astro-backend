@@ -89,15 +89,14 @@ export const forgotPassword = async (req, res) => {
     console.log("EMAIL_PASS exists:", !!process.env.EMAIL_PASS);
 
     const transporter = nodemailer.createTransport({
-      host: "smtp.gmail.com",
-      port: 465,
-      secure: true,
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-      },
-      connectionTimeout: 10000,
-    });
+  host: "smtp-relay.brevo.com",
+  port: 587,
+  secure: false,
+  auth: {
+    user: process.env.BREVO_USER,
+    pass: process.env.BREVO_PASS,
+  },
+});
 
     await transporter.sendMail({
       to: user.email,
