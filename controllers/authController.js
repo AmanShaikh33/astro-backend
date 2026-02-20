@@ -85,13 +85,16 @@ export const forgotPassword = async (req, res) => {
 
     const resetUrl = `https://astro-backend-qdu5.onrender.com/reset-password/${resetToken}`;
 
-    const transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-      },
-    });
+   const transporter = nodemailer.createTransport({
+  host: "smtp.gmail.com",
+  port: 465,
+  secure: true,
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
+  connectionTimeout: 10000,
+});
 
     await transporter.sendMail({
       to: user.email,
