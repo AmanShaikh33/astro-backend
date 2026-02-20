@@ -64,7 +64,6 @@ export const forgotPassword = async (req, res) => {
 
     const user = await User.findOne({ email });
 
-    // Always return same message (security)
     if (!user) {
       return res.status(200).json({
         message: "If email exists, reset link sent",
@@ -79,36 +78,37 @@ export const forgotPassword = async (req, res) => {
       .digest("hex");
 
     user.resetPasswordToken = hashedToken;
-    user.resetPasswordExpire = Date.now() + 15 * 60 * 1000; // 15 min
+    user.resetPasswordExpire = Date.now() + 15 * 60 * 1000;
 
     await user.save();
 
     const resetUrl = `https://astro-backend-qdu5.onrender.com/reset-password/${resetToken}`;
 
-   const transporter = nodemailer.createTransport({
-  host: "smtp.gmail.com",
-  port: 465,
-  secure: true,
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-  connectionTimeout: 10000,
-});
+    // 🔥 ADD THESE LOGS RIGHT HERE
+    console.log("EMAIL_USER:", process.env.EMAIL_USER);
+    console.log("EMAIL_PASS exists:", !!process.env.EMAIL_PASS);
+
+    const transporter = nodemailer.createTransport({
+      host: "smtp.gmail.com",
+      port: 465,
+      secure: true,
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+      },
+      connectionTimeout: 10000,
+    });
 
     await transporter.sendMail({
       to: user.email,
       subject: "Password Reset",
-      html: `
-        <p>You requested password reset</p>
-        <a href="${resetUrl}">${resetUrl}</a>
-        <p>This link expires in 15 minutes</p>
-      `,
+      html: `<a href="${resetUrl}">Reset Password</a>`,
     });
 
     res.json({ message: "Reset link sent" });
 
   } catch (error) {
+    console.error("FORGOT ERROR:", error);
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
