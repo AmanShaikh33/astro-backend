@@ -182,10 +182,21 @@ export const getApprovedAstrologers = async (req, res) => {
 export const getAstrologerEarnings = async (req, res) => {
   try {
     const astrologer = await Astrologer.findOne({ userId: req.user.id });
+
     if (!astrologer) {
       return res.status(404).json({ message: "Astrologer profile not found" });
     }
-    res.status(200).json({ earnings: astrologer.earnings || 0 });
+
+    const totalEarnings = astrologer.earnings || 0;
+    const totalPaid = astrologer.totalPaid || 0;
+    const pendingAmount = totalEarnings - totalPaid;
+
+    res.status(200).json({
+      totalEarnings,
+      totalPaid,
+      pendingAmount,
+    });
+
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Failed to fetch earnings" });
