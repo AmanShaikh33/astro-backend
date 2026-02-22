@@ -3,6 +3,7 @@ import { createProfile, getMyProfile, updateProfile, deleteProfile, getAllAstrol
 import { protect, verifyRole } from "../middlewares/authMiddleware.js";
 import upload from "../middlewares/uploadMiddleware.js";
 import Astrologer from "../models/Astrologer.js";
+import Settlement from "../models/Settlement.js";
 
 const router = express.Router();
 
