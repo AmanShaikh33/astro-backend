@@ -19,6 +19,30 @@ router.get("/approved", getApprovedAstrologers);
 
 router.get("/", protect, getAllAstrologers);
 
+router.get(
+  "/settlement-history",
+  protect,
+  verifyRole(["astrologer"]),
+  async (req, res) => {
+    try {
+      const astrologer = await Astrologer.findOne({ userId: req.user.id });
+
+      if (!astrologer) {
+        return res.status(404).json({ message: "Astrologer not found" });
+      }
+
+      const settlements = await Settlement.find({
+        astrologer: astrologer._id,
+      }).sort({ paidAt: -1 });
+
+      res.json(settlements);
+    } catch (err) {
+      console.error("❌ Settlement History Error:", err);  // ADD THIS
+      res.status(500).json({ message: "Failed to fetch history" });
+    }
+  }
+);
+
 
 router.get("/:id", protect, async (req, res) => {
   try {
@@ -49,24 +73,7 @@ router.delete("/admin/:id", protect, verifyRole(["admin"]), async (req, res) => 
   }
 });
 
-router.get(
-  "/settlement-history",
-  protect,
-  verifyRole(["astrologer"]),
-  async (req, res) => {
-    try {
-      const astrologer = await Astrologer.findOne({ userId: req.user.id });
 
-      const settlements = await Settlement.find({
-        astrologer: astrologer._id,
-      }).sort({ paidAt: -1 });
-
-      res.json(settlements);
-    } catch (err) {
-      res.status(500).json({ message: "Failed to fetch history" });
-    }
-  }
-);
 
 
 export default router;
