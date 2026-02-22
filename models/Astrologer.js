@@ -50,7 +50,17 @@ const astrologerSchema = new mongoose.Schema({
   coins: {
     type: Number,
     default: 0
-  }
+  },
+
+  totalPaid: {
+  type: Number,
+  default: 0
+},
+
+lastSettlementDate: {
+  type: Date,
+  default: null
+}
 }, { timestamps: true });
 
 export default mongoose.model("Astrologer", astrologerSchema);
