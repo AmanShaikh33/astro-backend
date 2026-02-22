@@ -48,6 +48,24 @@ router.delete("/admin/:id", protect, verifyRole(["admin"]), async (req, res) => 
   }
 });
 
+router.get(
+  "/settlement-history",
+  protect,
+  verifyRole(["astrologer"]),
+  async (req, res) => {
+    try {
+      const astrologer = await Astrologer.findOne({ userId: req.user.id });
+
+      const settlements = await Settlement.find({
+        astrologer: astrologer._id,
+      }).sort({ paidAt: -1 });
+
+      res.json(settlements);
+    } catch (err) {
+      res.status(500).json({ message: "Failed to fetch history" });
+    }
+  }
+);
 
 
 export default router;
