@@ -12,8 +12,8 @@ export const createProfile = async (req, res) => {
     }
 
     const profilePicUrl = req.file
-      ? `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`
-      : null;
+  ? `/uploads/${req.file.filename}`
+  : null;
 
     const astrologer = await Astrologer.create({
       userId: req.user.id,
