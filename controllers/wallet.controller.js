@@ -37,7 +37,6 @@ export const createOrder = async (req, res) => {
   }
 };
 
-
 export const razorpayWebhook = async (req, res) => {
   const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
   const signature = req.headers["x-razorpay-signature"];
@@ -79,7 +78,6 @@ export const razorpayWebhook = async (req, res) => {
 
   return res.json({ status: "ignored_event" });
 };
-
 
 export const getBalance = async (req, res) => {
   try {

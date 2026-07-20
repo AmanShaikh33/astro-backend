@@ -34,7 +34,6 @@ export const createProfile = async (req, res) => {
   }
 };
 
-
 export const getMyProfile = async (req, res) => {
   try {
     const astrologer = await Astrologer.findOne({ userId: req.user.id });
@@ -81,8 +80,6 @@ export const updateProfile = async (req, res) => {
   }
 };
 
-
-// Delete Profile
 export const deleteProfile = async (req, res) => {
   try {
     await Astrologer.findOneAndDelete({ userId: req.user.id });
@@ -91,7 +88,6 @@ export const deleteProfile = async (req, res) => {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
-
 
 export const getAllAstrologers = async (req, res) => {
   try {
@@ -138,7 +134,6 @@ export const getAllAstrologers = async (req, res) => {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
-
 
 export const updateAvailability = async (req, res) => {
   try {

@@ -9,8 +9,6 @@ export const getPendingAstrologers = async (req, res) => {
   }
 };
 
-
-
 export const approveAstrologer = async (req, res) => {
   try {
     const astrologer = await Astrologer.findById(req.params.id);
@@ -44,7 +42,6 @@ export const rejectAstrologer = async (req, res) => {
   }
 };
 
-// Get astrologers with optional status filter
 export const getAstrologersWithFilter = async (req, res) => {
   try {
     const { status } = req.query;

@@ -47,7 +47,6 @@ export const loginUser = async (req, res) => {
   res.json({ token, user });
 };
 
-
 export const getMe = async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select("-password");

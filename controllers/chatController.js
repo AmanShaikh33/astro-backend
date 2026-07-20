@@ -85,8 +85,6 @@ export const endChatSession = async (req, res) => {
   res.json({ message: "Chat ended" });
 };
 
-
-
 export const createOrGetChatRoom = async (req, res) => {
   try {
     const { astrologerId, userId } = req.body;
@@ -154,7 +152,6 @@ export const createOrGetChatRoom = async (req, res) => {
   }
 };
 
-
 export const sendMessage = async (req, res) => {
   try {
     const { chatRoomId, receiverId, content } = req.body;
@@ -186,7 +183,6 @@ export const sendMessage = async (req, res) => {
   }
 };
 
-
 export const getMessages = async (req, res) => {
   try {
     const { chatRoomId } = req.params;
@@ -205,7 +201,6 @@ export const getMessages = async (req, res) => {
     res.status(500).json({ message: "Failed to fetch messages", error: error.message });
   }
 };
-
 
 export const getUserChats = async (req, res) => {
   try {
