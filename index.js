@@ -186,22 +186,34 @@ io.on("connection", (socket) => {
         user: userId,
         astrologer: chatRequest.astrologer,
         startTime: new Date(),
+        lastBilledAt: new Date(),
         coinsPerMinute: astrologer.pricePerMinute,
         status: "active",
       });
 
       console.log("Chat session created:", chatSession._id);
       console.log("Starting billing - Rate:", astrologer.pricePerMinute, "coins/min");
-      
-    
-      startChatBilling(chatSession._id.toString(), io);
-      
+
+      const sessionRoom = chatSession._id.toString();
+
+      // Put both people in the session room right now, server-side --
+      // don't wait for the client to round-trip a "joinSession" emit
+      // back to us. That round-trip has to cross the network, and the
+      // billing/timer intervals below start immediately, so any delay
+      // there was causing the first tick(s) to be missed on one or
+      // both sides, which is what made the countdown/deduction feel
+      // laggy or inconsistent right at the start of a chat.
+      socket.join(sessionRoom); // this is the astrologer's own socket
+      io.in(`user_${userId}`).socketsJoin(sessionRoom);
+
+      startChatBilling(sessionRoom, io);
+
       io.to(`user_${userId}`).emit("chat-accepted", {
-        sessionId: chatSession._id.toString(),
+        sessionId: sessionRoom,
       });
-      
+
       socket.emit("session-created", {
-        sessionId: chatSession._id.toString(),
+        sessionId: sessionRoom,
       });
       
       console.log("Sent chat-accepted to user:", userId, "and session-created to astrologer");
