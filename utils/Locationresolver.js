@@ -1,25 +1,26 @@
 /**
  * locationResolver.js
- * Converts a free-text birth place into { lat, lon, timezoneOffsetHours }
- * using free/offline services, with an in-memory cache so repeated
- * city lookups (Pune, Mumbai, Delhi...) don't hit Nominatim every time.
+ * Converts a free-text birth place into { lat, lon, timezoneOffsetHours }.
+ *
+ * NOTE: Nominatim (OpenStreetMap) was tried first, but it blocks/rate-limits
+ * requests from cloud hosting providers like Render — that's why you were
+ * seeing "Access denied" instead of JSON. Switched to OpenCage instead,
+ * which allows server/cloud traffic on its free tier (2,500 requests/day).
+ *
+ * Get a free API key at: https://opencagedata.com/users/sign_up
+ * Then add to your Render environment variables: OPENCAGE_API_KEY=your_key_here
  *
  * Install:
  *   npm install tz-lookup moment-timezone node-fetch
- *
- * NOTE: the in-memory cache below resets on server restart. For production,
- * swap the Map for a DB table (e.g. a `geocode_cache` collection in MongoDB)
- * so the cache survives restarts and works across multiple server instances.
  */
 
 import tzLookup from 'tz-lookup';
 import moment from 'moment-timezone';
 import fetch from 'node-fetch';
 
-// Simple in-memory cache: placeName (lowercased) -> { lat, lon, displayName }
 const geocodeCache = new Map();
 
-// ---------- Step 1: Place name -> lat/lon (Nominatim, OpenStreetMap) ----------
+// ---------- Step 1: Place name -> lat/lon (OpenCage) ----------
 
 export async function geocodePlace(placeName) {
   const cacheKey = placeName.trim().toLowerCase();
@@ -28,24 +29,33 @@ export async function geocodePlace(placeName) {
     return geocodeCache.get(cacheKey);
   }
 
-  const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(placeName)}`;
+  const apiKey = process.env.OPENCAGE_API_KEY;
+  if (!apiKey) {
+    throw new Error('OPENCAGE_API_KEY is missing from environment variables');
+  }
 
-  const response = await fetch(url, {
-    headers: {
-      'User-Agent': 'AstroConnect/1.0 (contact: your-email@example.com)',
-    },
-  });
+  const url = `https://api.opencagedata.com/geocode/v1/json?q=${encodeURIComponent(placeName)}&key=${apiKey}&limit=1`;
+
+  const response = await fetch(url);
+
+  // Defensive check: if OpenCage ever returns non-JSON (rate limit page, etc.),
+  // fail with a clear message instead of a cryptic JSON parse error.
+  const contentType = response.headers.get('content-type') || '';
+  if (!contentType.includes('application/json')) {
+    const rawText = await response.text();
+    throw new Error(`Geocoding service returned non-JSON response: ${rawText.slice(0, 200)}`);
+  }
 
   const data = await response.json();
 
-  if (!data || data.length === 0) {
+  if (!data.results || data.results.length === 0) {
     throw new Error(`Could not find location for "${placeName}"`);
   }
 
   const result = {
-    lat: parseFloat(data[0].lat),
-    lon: parseFloat(data[0].lon),
-    displayName: data[0].display_name,
+    lat: data.results[0].geometry.lat,
+    lon: data.results[0].geometry.lng,
+    displayName: data.results[0].formatted,
   };
 
   geocodeCache.set(cacheKey, result);
