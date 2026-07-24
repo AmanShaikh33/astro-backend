@@ -22,6 +22,7 @@ import chatRoutes from "./routes/chatRoutes.js";
 import paymentRoutes from "./routes/paymentRoutes.js";
 import ChatRequest from "./models/ChatRequest.js";
 import horoscopeRoutes from "./routes/horoscope.js";
+import kundliRoutes from "./routes/kundliRoutes.js";  
 
 dotenv.config();
 const app = express();
@@ -77,6 +78,7 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/horoscope", horoscopeRoutes);
+app.use("/api/kundli", kundliRoutes);        
 
 app.get("/", (_, res) => res.send("AstroTalk Backend Running"));
 
